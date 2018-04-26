@@ -1,0 +1,228 @@
+@{
+    ViewBag.Title = "大額結匯申報作業";
+}
+
+<div style="margin-top: 20px;">
+    <span style="font-size: 24px;">@ViewBag.Title </span>
+    <span id="loader" style="display:none;" class="glyphicon glyphicon-refresh glyphicon-refresh-animate form-inline"></span>
+    <span id="label_MergeStatus" class="label MergeStatus" style="display:none"></span>
+</div>
+<hr />
+
+<div id="ViewRateModal" style="font-size:10px;position:fixed;top:50px;left:0;z-index:100;display:none;">
+    <div id="root_ViewRateModalContent"></div>
+</div>
+
+<div class="form-horizontal">
+    <nav class="navbar navbar-default">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <div class="form-group form-inline navbar-brand">
+                    <input type="button" id="btnExecute" value="查詢" class="btn btn-default" onclick="Action.Execute()">
+                    <input type="text" id="baseDate" class="form-control" >
+                    <input type="button" id="btnViewRate" value="檢視匯率" class="btn btn-default" onclick="$('#ViewRateModal').toggle()" disabled/>
+                    <input type="button" id="btnUpload" value="上傳至APUS" class="btn btn-primary" onclick="Action.Upload()" disabled/>
+
+                    <!-- Test Env Code. -->
+                    <div class="checkbox" style="padding-left:50px;" >
+                        <label>
+                            <input type="checkbox" id="blankCheckbox" value="option1" aria-label="..." onclick="TestEnvFunc()" checked>
+                            正式環境模擬
+                        </label>
+                    </div>
+                    <!--................-->
+
+                </div>
+            </div>
+        </div>
+    </nav>
+</div>
+<div id="root"></div>
+
+@section Scripts {
+    <script type="text/javascript" src="~/Scripts/bootstrap-filestyle.min.js"></script>
+    <script type="text/javascript" src="~/Scripts/CentralBankReporting/Common.js"></script>
+    <script type="text/javascript" src="~/Scripts/jquery.stickytableheaders.js"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $('#baseDate').datetimepicker({
+                maxDate: 'now',
+                format: 'YYYY/MM/DD',
+                defaultDate: new Date()                
+            }).on("dp.change", function (e) { DatePickerClick() });
+
+            Action.Execute();
+        });
+
+        var Action = new Container();
+        function Container(param) {
+            this.Execute = function () {
+                doExecute('@Url.Action("BO_I_004_Search", "CentralBankReporting")');
+            }
+
+            this.Update = function (KEY) {
+                if (IsToday) {
+                    $('#loader').fadeIn("fast");
+
+                    var CLASS_ID = '#CLASS_' + KEY;
+                    var CODE69X_ID = '#69X_' + KEY;
+                    var CNTRY_ID = '#CNTRY_' + KEY;
+                    var dropNum_ID = '#TEMP_REM_TYPE_' + KEY;
+
+                    var data = new FormData();
+                    data.append("REM_TYPE", $(dropNum_ID).text());
+                    data.append("CLASS", $(CLASS_ID).val());
+                    data.append("SUB_69X_CODE", $(CODE69X_ID).val());
+                    data.append("CNTRY", $(CNTRY_ID).val());
+
+                    const ObjKey = KEYspilter(KEY);
+                    data.append("NB", ObjKey.NB);
+                    data.append("Contract", ObjKey.Contract);
+                    data.append("CCY", ObjKey.CCY);
+
+                    $.ajax({
+                        type: "POST",
+                        url: '@Url.Action("BO_I_004_Update", "CentralBankReporting")',
+                        contentType: false,
+                        processData: false,
+                        data: data,
+                        async: true,
+                        success: function (res) {
+                        },
+                        error: function (xhr, status) {
+                            UIHelper.alert('執行失敗');
+                        },
+                        complete: function (xhr, status) {
+                            $('#loader').fadeOut("slow");
+                        }
+                    });
+                }
+            }
+
+            this.Upload = function () {
+                doUpload('@Url.Action("BO_I_004_Upload", "CentralBankReporting")');
+            }
+        };
+
+        function BindTable(data)
+        {
+            //Title
+            var titleArray = ['Contract ID', '訂約日', '匯入/匯出', '身分別', 'Currency', 'Amount', 'CLASS', '69X細分類', '匯/受款國別'];
+            var trHTML = '<table id="BindTable" class="grid table table-hover"><thead><tr class="grid head">'
+            titleArray.forEach(function (element) {
+                trHTML += '<th scope="col" style="width:115px">' + element + '</th>'
+            });
+            trHTML += '</tr></thead><tbody>';
+
+            //Content
+            var temp_CTPY_ID = '';
+            var temp_Nature1 = '';
+            var temp_CCY = '';
+            var temp_USDrate = 0;
+            var totalAmount;
+
+            data.forEach(function (element, index) {
+                if (temp_CTPY_ID != element.CTPY_ID || temp_Nature1 != element.Nature1) {
+                    if (index != 0) {
+                        trHTML += '<tr style=' + getTableBackgroundColor() + '><td colspan="9"><span style="float:right;" >折合美金約：' + AmountUSD(totalAmount, temp_CCY, temp_USDrate).toLocaleString('en-US') + '</span></td></tr>';
+                        TableBackgroundColorState++;
+                    }
+                    trHTML += '<tr style=' + getTableBackgroundColor() + '><td colspan="9">' + element.CTPY_ID + ' ' + element.CTPY_NAME + ' - ' + element.Nature1 + '<span style="float:right;" >統編： ' + element.M_RED_ID + '</span></td></tr>';
+                    totalAmount = 0;
+                }
+                
+                var KEY = element.NB + '_' + element.Contract + '_' + element.CCY;
+
+                trHTML += '<tr style=' + getTableBackgroundColor() + '>';
+                trHTML += '<td class="center">' + element.Contract + '</td>'; //Contract ID
+                trHTML += '<td class="center">' + parseJsonDate(element.Trade_Date) + '</td>'; //訂約日
+                trHTML += '<td class="center">' + renderIO(element.IO) + '</td >'; //匯入/匯出
+                trHTML += '<td>' + renderRemType(KEY, element.REM_Type) + '</td>'; //身分別
+                trHTML += '<td class="center">' + element.CCY + '</td>'; //Currency
+                trHTML += '<td class="right">' + element.Amount.toLocaleString('en-US') + '</td> '; //Amount                
+                trHTML += '<td><div class=""><input title="" type="text" class="form-control" data-id="' + KEY + '" id="CLASS_' + KEY + '" value="' + replaceNull(element.CLASS) + '" maxlength="3"></div></input></td>'; //CLASS
+                trHTML += '<td><div class=""><input type="text" class="form-control" data-id="' + KEY + '" id="69X_' + KEY + '" value="' + replaceNull(element.SUB_69X_CODE) + '" maxlength="1"></div></input></td>'; //69X細分類
+                trHTML += '<td><div class=""><input type="text" class="form-control" data-id="' + KEY + '" id="CNTRY_' + KEY + '"value="' + replaceNull(element.CNTRY) + '" maxlength="2"></div></input></td></tr>'; //匯/受款國別
+
+                temp_CTPY_ID = element.CTPY_ID;
+                temp_Nature1 = element.Nature1;
+                temp_CCY = element.CCY;
+                temp_USDrate = element.USD_Rate;
+
+                totalAmount += element.Amount;
+
+                if (index == data.length-1) {
+                    trHTML += '<tr style=' + getTableBackgroundColor() + '><td colspan="9"><span style="float:right;" >折合美金約：' + AmountUSD(totalAmount, element.CCY, element.USD_Rate).toLocaleString('en-US') + '</span></td></tr>';
+                }
+            });
+
+            trHTML += '</tbody>';
+            $('#root').empty();
+            $('#root').append(trHTML);
+
+            var $offset = $('.navbar').height();
+            $('#BindTable').stickyTableHeaders({ fixedOffset: $offset });
+
+            $.each($('#BindTable input:text'), function (key, element) {
+                element.addEventListener("blur", function () {
+                    $('#' + element.id).parent().removeClass();
+                    if (element.value.length < element.maxLength) {
+                        element.title = '注意: 此欄位長度為' + element.maxLength;
+                        $('#' + element.id).tooltip('show');
+                        $('#' + element.id).parent().addClass('has-error');
+                    }
+                    else {
+                        $('#' + element.id).attr('data-original-title', '');
+                        $('#' + element.id).parent().addClass('has-success');                        
+                    }
+                    Action.Update($('#' + element.id).attr('data-id'));
+                });
+            });
+        }
+
+        var array = ['1：公司行號/廠商',
+                     '2：團體/團體',
+                     '3：我國國民/個人',
+                     '4：外國人/其它',
+                     '5：銀行本身外匯交易'];
+        function renderRemType(KEY, REM_Type) {
+            var html = '<div class="dropdown center"><div id="TEMP_REM_TYPE_' + KEY + '" style="display:none">' + REM_Type + '</div>';
+                html += '<button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu_' + KEY + '" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true" style="width:200px;" value="' + replaceNull(REM_Type) + '">' +
+                replaceNull(array[REM_Type - 1]) + '<span class="caret"></span></button>';
+
+            html += '<ul class="dropdown-menu" aria-labelledby="dropdownMenu1" style="width:200px;">';
+            array.forEach(function (element, index) {
+                html += '<li><a onclick=" ChangeSaveItem(\'' + KEY + '\', ' + index + ')">' + element + '</a></li>';
+            });
+            html += '</ul></div>';
+
+            return html;
+        }
+
+        function ChangeSaveItem(KEY, index) {
+            var dropdown_ID = '#dropdownMenu_' + KEY;
+            $(dropdown_ID).text(array[index]).append('<span class="caret"></span>');
+            $(dropdown_ID).attr('value', index);
+            $(dropdown_ID).attr('style', 'width:200px; border-color: #3C763D;');
+
+            var dropNum_ID = '#TEMP_REM_TYPE_' + KEY;
+            $(dropNum_ID).text(index + 1);
+
+            Action.Update(KEY);
+        }
+
+        function renderIO(element) {
+            if (element == 'I') {
+                return 'In'
+            }
+            else if (element == 'O') {
+                return 'Out'
+            }
+        }
+    </script>
+}
+
+@section Styles {
+    <link href="~/Content/CentralBankReporting/Common.css" rel="stylesheet" />   
+}
