@@ -1,0 +1,79 @@
+div {
+    font-family: Microsoft JhengHei;
+}
+
+th {
+    color: #337AB7;
+}
+
+.titleStyle {
+    font-size: 12px;
+}
+
+.table-hover tbody tr:hover td {
+    background-color: rgba(255,0,0,0.1);
+}
+
+.table > tbody > tr > td {
+    vertical-align: middle;
+    padding: 5px;
+}
+
+.glyphicon-refresh-animate {
+    -animation: spin .7s infinite linear;
+    -webkit-animation: spin2 .7s infinite linear;
+}
+
+#btnViewRate {
+    color: white;
+    background: grey;
+}
+
+#btnViewRate.changed {
+    color: black;
+    background: white;
+}
+
+.center {
+    text-align: center;
+}
+
+.right {
+    text-align: right;
+}
+
+.left {
+    text-align: left;
+}
+
+.renderNature3 {
+    text-indent: 25px;
+    line-height: 35px;
+    z-index: 1;
+    position: absolute;
+}
+
+.Nature3Selector {
+    position: fixed;
+    top: 150px;
+}
+
+@-webkit-keyframes spin2 {
+    from {
+        -webkit-transform: rotate(0deg);
+    }
+
+    to {
+        -webkit-transform: rotate(360deg);
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: scale(1) rotate(0deg);
+    }
+
+    to {
+        transform: scale(1) rotate(360deg);
+    }
+}
